@@ -1,4 +1,6 @@
-/venv/
+/venv
 Data365.csv
-/.idea/
-/Data/
+/.idea
+/Data
+/config
+/Algos

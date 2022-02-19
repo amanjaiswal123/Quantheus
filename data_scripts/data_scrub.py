@@ -1,6 +1,6 @@
 import pandas
-from source.Commons import upload_to_rds_table, notify
-from source.config import *
+from source.Commons import notify
+from config.config import *
 from sqlalchemy import create_engine
 from psycopg2 import connect
 

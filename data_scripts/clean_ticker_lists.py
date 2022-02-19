@@ -3,7 +3,7 @@ from datetime import timedelta
 import time as Time
 from source.AWS import *
 from source.Commons import upload_to_rds_table, notify
-from source.config import qtheus_rds
+from config.config import qtheus_rds
 import pandas
 from sqlalchemy import create_engine
 import psycopg2
@@ -21,6 +21,7 @@ while True:
     # Check if Today is a Trading Day by looking if it is in a list of all Trading Days until 2024 that is imported
     print('Creating/Updating a cleaned ticker list on', Today)
     try:
+
         conn = create_engine('postgresql+psycopg2://' + qtheus_rds['user'] + ':' + qtheus_rds['password'] + '@' + qtheus_rds['host'] + '/' + qtheus_rds['dbname'])  # Connection to upload to database
     except Exception as e:  # catch exception and notify
         print("Connection Error: Could not connect sql alchemy to Database to clean ticker list")

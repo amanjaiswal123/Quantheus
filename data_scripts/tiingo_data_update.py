@@ -5,7 +5,7 @@ import time as Time
 from source.Commons import notify
 from source.AWS import *
 from source.Commons import upload_to_rds_table
-from source.config import data_logs_path
+from config.config import data_logs_path
 firstrun = True
 first = False
 # This is used to update data everyday from tiingo

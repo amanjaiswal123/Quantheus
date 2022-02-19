@@ -142,4 +142,4 @@ def UpTrend(Fields, Portfolio, datadate, first_calc, YSignals=None):
     Pipe.sort_values('Potential Gain',ascending=False,inplace=True)
     return Pipe
 #Realtime(UpTrend,365*5)
-Backtest(UpTrend,End_Date='2020-07-24',Start_Date='2020-04-09',StartingOffset=365*5,SC=2000,BacktestTitle='PeakTroughP60MKSTPLMT')
+Backtest(UpTrend,End_Date='2015-04-16',Start_Date='2015-04-09',SC=2000,BacktestTitle='PeakTroughP60MKSTPLMT')

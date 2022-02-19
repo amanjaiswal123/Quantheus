@@ -4,7 +4,7 @@ import numpy
 import time
 from urllib.error import URLError
 from datetime import timedelta
-from source.config import *
+from config.config import *
 from source.Commons import ticker_list
 
 

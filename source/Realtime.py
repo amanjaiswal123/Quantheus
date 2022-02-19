@@ -7,7 +7,7 @@ from datetime import datetime
 pandas.set_option('mode.chained_assignment', None)
 from os import remove
 from os.path import exists
-from source.config import PortfolioPath, subtradespath, Signalspath, ranpath,InitialMargReq
+from config.config import PortfolioPath, subtradespath, Signalspath, ranpath,InitialMargReq
 
 
 StartTime = datetime.now()

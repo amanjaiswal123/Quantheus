@@ -9,7 +9,7 @@ import time
 import warnings
 from ibapi.order_state import OrderState
 from ibapi.order import Order
-from source.config import NYSETtickerlist, NASDAQtickerlist
+from config.config import NYSETtickerlist, NASDAQtickerlist
 
 def nyse_ticker_list():
     return pandas.read_csv(NYSETtickerlist)['Symbol'].values

@@ -8,9 +8,10 @@ from time import sleep
 import os
 from source.Commons import NearestTradingDay
 from source.Commons import TradingDays
-from source.config import backtestdatapath, livedatapath
+from config.config import backtestdatapath, livedatapath
 import pandas
 import psycopg2
+from config.config import qtheus_rds
 
 #When calling Ahistory you must a start_day or an amount of days and a source of data
 def AHistroy(Field:[],Source:str,Start_Day=None,End_Day=NearestTradingDay(str(datetime.now().date())),Days=None):
@@ -161,7 +162,7 @@ def AHistroy(Field:[],Source:str,Start_Day=None,End_Day=NearestTradingDay(str(da
             pass
     elif Source == "rds":
         try:
-            conn = psycopg2.connect(dbname='postgres', user='qtheus',host='qtheus-dev.cxd1dlbrmydp.us-east-2.rds.amazonaws.com', password='ycoWwypi2')
+            conn = psycopg2.connect(dbname='postgres', user=qtheus_rds['user'],host=qtheus_rds['host'], password=qtheus_rds['password'])
         except:
             raise Exception("Unable to connect to the database")
         Data = pandas.read_sql("""SELECT * FROM alpha_vantage WHERE date >= %s and date <= %s""",conn,params=(Start_Day,End_Day))

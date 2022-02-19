@@ -635,6 +635,7 @@ def Backtest(func,WData=['all'],End_Date=_datadate(), Start_Date=None, Days=None
 
 
     except Exception as e:
+        print(e)
         #notify('The '+BacktestTitle+'_'+Start_Date+'-'+End_Date+' backtest has failed')
         Transactions.to_csv(BacktestTitle+'_'+Start_Date+'-'+End_Date+'_Transactions.csv')
         Daily_Balances.to_csv(BacktestTitle+'_'+Start_Date+'-'+End_Date+'_DailyBalances.csv')

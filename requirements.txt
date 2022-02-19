@@ -28,3 +28,5 @@ slackclient==2.9.3
 urllib3==1.26.3
 websocket-client==0.57.0
 yarl==1.6.3
+sqlalchemy
+psycopg2

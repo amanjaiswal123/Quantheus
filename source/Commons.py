@@ -8,8 +8,8 @@ import pandas
 import numpy
 import slack
 from warnings import warn
-from source.config import logpath
-from source.config import qtheus_rds
+from config.config import logpath
+from config.config import qtheus_rds
 
 #This is a file which will be used to import common functions and variables that do not need thier own files
 Today = str(datetime.today().date())

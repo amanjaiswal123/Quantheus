@@ -2,20 +2,16 @@ from source.Commons import notify
 from source.Commons import upload_to_rds_table
 import time
 from urllib.error import URLError
-from source.config import *
+from config.config import *
 from source.Commons import ticker_list
 #This is used to get data
 import warnings
-from data_scripts.tiingo_data_stream import get_data_tiingo
 import numpy
 from datetime import datetime,timedelta
-from time import sleep
-import os
 from source.Commons import NearestTradingDay
-from source.Commons import TradingDays
-from source.config import backtestdatapath, livedatapath
 import pandas
 import psycopg2
+from config import qtheus_rds
 
 Today = str(datetime.today().date())
 
@@ -158,7 +154,7 @@ def AHistroy(Field:[],Source:str,Start_Day=None,End_Day=NearestTradingDay(str(da
     Fetch = get_data_a_v()
     Data = Fetch.NYSEandNASDAQData()
     Data['adj_open'] = (Data['adj_close'] / Data['close']) * Data['open']
-    conn = psycopg2.connect(dbname='postgres', user='qtheus',host='quantheus.cxd1dlbrmydp.us-east-2.rds.amazonaws.com', password='ycoWwypi2')
+    conn = psycopg2.connect(dbname='postgres', user=qtheus_rds['user'],host=qtheus_rds['host'], password=qtheus_rds['password'])
     Data = pandas.read_sql("""SELECT * FROM alpha_vantage WHERE date >= %s and date <= %s""",conn,params=(Start_Day,End_Day))
     Data["date"] = Data["date"].astype(str)
     Data = Data.rename(columns={'date':'dat'})
