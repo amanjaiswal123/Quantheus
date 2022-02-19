@@ -6,10 +6,11 @@ from dateutil.easter import *
 from calendar import day_name
 import pandas
 import numpy
-import slack
+from slack_sdk import WebClient
 from warnings import warn
 from config.config import logpath
 from config.config import qtheus_rds
+from config.config import slack_token
 
 #This is a file which will be used to import common functions and variables that do not need thier own files
 Today = str(datetime.today().date())
@@ -298,9 +299,9 @@ def RemoveBadData(Data,Start_Date=None,End_Date=_datadate(Today),Days=None,Tradi
             Data.drop(x,inplace=True)
     return Data
 def notify(message, channel='notify'):
-    token = 'xoxp-432607930960-433217739571-433218240691-4e15b796ef653ab848368731c03bbc25'
-  #  sc = slack(token=token)
- #   sc.chat_postMessage(channel=channel,text=message, username='Mister Gutsy',icon_emoji=':robot_face:')
+    token = slack_token
+    sc = WebClient(token=token)
+    sc.chat_postMessage(channel=channel,text=message)
 def ticker_list(exchange='all'): #Get list of tickers Ticker list
     conn = create_engine('postgresql+psycopg2://' + qtheus_rds['user'] + ':' + qtheus_rds['password'] + '@' + qtheus_rds['host'] + '/' + qtheus_rds['dbname'])
     if exchange.lower() == "nyse":

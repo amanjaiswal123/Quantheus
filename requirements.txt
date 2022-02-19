@@ -24,7 +24,7 @@ pytz==2021.1
 requests==2.25.1
 s3transfer==0.3.4
 six==1.15.0
-slackclient==2.9.3
+slack_sdk
 urllib3==1.26.3
 websocket-client==0.57.0
 yarl==1.6.3
@@ -32,5 +32,4 @@ sqlalchemy
 psycopg2-binary
 psycopg2
 bs4
-slack
 lxml
