@@ -19,7 +19,7 @@ def _clean_data(df):
     # Move Company Name to 2nd Col
     cols = list(df.columns)
     cols.insert(1, cols.pop(-1))
-    df = df.ix[:, cols]
+    df = df.loc[:, cols]
 
     return df
 
