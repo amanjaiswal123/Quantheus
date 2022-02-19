@@ -30,3 +30,6 @@ websocket-client==0.57.0
 yarl==1.6.3
 sqlalchemy
 psycopg2
+bs4
+slack
+lxml

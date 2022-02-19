@@ -299,8 +299,8 @@ def RemoveBadData(Data,Start_Date=None,End_Date=_datadate(Today),Days=None,Tradi
     return Data
 def notify(message, channel='notify'):
     token = 'xoxp-432607930960-433217739571-433218240691-4e15b796ef653ab848368731c03bbc25'
-    sc = slack(token=token)
-    sc.chat_postMessage(channel=channel,text=message, username='Mister Gutsy',icon_emoji=':robot_face:')
+  #  sc = slack(token=token)
+ #   sc.chat_postMessage(channel=channel,text=message, username='Mister Gutsy',icon_emoji=':robot_face:')
 def ticker_list(exchange='all'): #Get list of tickers Ticker list
     conn = create_engine('postgresql+psycopg2://' + qtheus_rds['user'] + ':' + qtheus_rds['password'] + '@' + qtheus_rds['host'] + '/' + qtheus_rds['dbname'])
     if exchange.lower() == "nyse":
