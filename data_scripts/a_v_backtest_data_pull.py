@@ -11,7 +11,7 @@ from datetime import datetime,timedelta
 from source.Commons import NearestTradingDay
 import pandas
 import psycopg2
-from config import qtheus_rds
+from config.config import qtheus_rds
 
 Today = str(datetime.today().date())
 
