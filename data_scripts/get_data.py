@@ -31,7 +31,7 @@ def AHistroy(Field:[],Source:str,Start_Day=None,End_Day=NearestTradingDay(str(da
     #Getting the data from the specified source
     if Source == 'livehdfs':
         #Creating Spark conf and setting master and app name because to create spark context you need to pass configuration
-        conf = SparkConf().setAppName("TestAppAman").setMaster('local')
+        conf = SparkConf().setAppName("TestApp  Aman").setMaster('local')
         #Creating SparkConext with the conf we created which will be used to create a spark session
         sc = SparkContext(conf=conf)
         #Creating a Spark Session to query and read hdfs

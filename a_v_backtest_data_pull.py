@@ -154,10 +154,10 @@ def AHistroy(Field:[],Source:str,Start_Day=None,End_Day=NearestTradingDay(str(da
     Fetch = get_data_a_v()
     Data = Fetch.NYSEandNASDAQData()
     Data['adj_open'] = (Data['adj_close'] / Data['close']) * Data['open']
-    conn = psycopg2.connect(dbname='postgres', user=qtheus_rds['user'],host=qtheus_rds['host'], password=qtheus_rds['password'])
-    Data = pandas.read_sql("""SELECT * FROM alpha_vantage WHERE date >= %s and date <= %s""",conn,params=(Start_Day,End_Day))
-    Data["date"] = Data["date"].astype(str)
-    Data = Data.rename(columns={'date':'dat'})
+#    conn = psycopg2.connect(dbname='postgres', user=qtheus_rds['user'],host=qtheus_rds['host'], password=qtheus_rds['password'])
+ #   Data = pandas.read_sql("""SELECT * FROM alpha_vantage WHERE date >= %s and date <= %s""",conn,params=(Start_Day,End_Day))
+ #   Data["date"] = Data["dat"].astype(str)
+   # Data = Data.rename(columns={'date':'dat'})
     Data = Data.sort_values('dat')
     Data.set_index(['ticker', 'exchange', 'dat'], inplace=True)
     print('Retrieved '+str(Field)+' Data')
@@ -199,7 +199,7 @@ try:
     todaydata = AHistroy(['all'], 'alpha', End_Day=Today, Days=365*60)
 except Exception as e:
     print("Could not download data from alpha vantage on"+Today)
-    notify("Could not download data from alpha vantage on"+Today)
+    notify("Could not download data from alpha vantage on"+Today,'#Quantheus')
     todaydata.to_csv('todaydata.csv')
     raise e
 todaydata.to_csv('todaydata.csv')

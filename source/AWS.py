@@ -15,7 +15,8 @@ def Start_Instance(instance_id:str,wait_until_start=True):
         instance.wait_until_running()  # Wait until the instance is running
     return client #Return an instance of the client's connection to the AWS instance
 def ssh(instance_ID:str,path_to_key:str,user:str):
-    #Must pass the ID of the instance you want to connect too as instance_ID. Must Pass a path to the .pem key for that instance as path_to_key. By default the user is ubuntu can change by changing user argument
+    #Must pass the ID of the instance you want to connect too as instance_ID. Must Pass a path to the .pem key for that instance as path_to_key. By default the user is
+    # ubuntu can change by changing user argument
     ec2 = boto3.resource('ec2')  # Create instance of boto3 resource
     instance = ec2.Instance(instance_ID)  # Get info of EC2 Instance using the existing boto 3 resource Instance
     instanceIP = instance.public_dns_name  # Get the public DNS of the instance that we will use to ssh

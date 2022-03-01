@@ -23,4 +23,3 @@ def Analyze(FileName=str):
                 PrevBalance = Balance
 
                 break
-Analyze('C:/Users/swagm/Desktop/RSIEOV_2001-09-25-2018-09-21_Transactions.csv')
