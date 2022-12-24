@@ -5,3 +5,5 @@ Data365.csv
 /config
 test.py
 *.csv
+/Algos
+/Algos/*
