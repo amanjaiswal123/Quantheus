@@ -1,7 +1,9 @@
 from data_scripts.get_data import AHistroy
 from source.Commons import upload_to_rds_table
+from datetime import datetime
 try:
-    data = AHistroy(['all'], 'tiingo', End_Day='2020-07-26', Days=21900)
+    Today = str(datetime.today().date())
+    data = AHistroy(['all'], 'tiingo', End_Day=Today, Days=21900)
 except:
     data.to_csv('tiingodata.csv')
     raise e
