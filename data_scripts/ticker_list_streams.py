@@ -3,9 +3,7 @@ import requests
 import pandas
 from source.Commons import notify
 from bs4 import BeautifulSoup
-
-
-nasdaq_listing = 'ftp://ftp.nasdaqtrader.com/symboldirectory/nasdaqlisted.txt'# Nasdaq only
+import cloudscraper
 
 def _clean_data(df):
     df = df.copy()
@@ -24,6 +22,7 @@ def _clean_data(df):
     return df
 
 def  get_nasdaq_tickers_nasdaq_trader():
+    nasdaq_listing = 'ftp://ftp.nasdaqtrader.com/symboldirectory/nasdaqlisted.txt'  # Nasdaq only
     nasdaq = pd.read_csv(nasdaq_listing,sep='|')
 
     nasdaq = _clean_data(nasdaq)
@@ -37,18 +36,18 @@ def  get_nasdaq_tickers_nasdaq_trader():
     for df, filename in datasets:
         return df
 
-
 def get_tickers_advfn(): #Get tickers from advfn
     tickers = pandas.DataFrame(columns=['ticker', 'exchange']) #The website has alphabetical pagination so we must iterate through the pages using the alphabet to get all the tickers
     alpabhet = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u','v', 'w', 'x', 'y', 'z'] #The website has alphabetical pagination so we must iterate through the pages using the alphabet to get all the tickers
     try:
         for letter in alpabhet: #iterate through the alphabet
-            source = requests.get('https://www.advfn.com/nasdaq/nasdaq.asp?companies=' + letter.upper()).text #Get the source html from the website
+            scraper = cloudscraper.create_scraper()  # returns a CloudScraper instance
+            source = scraper.get('https://www.advfn.com/nasdaq/nasdaq.asp?companies=' + letter.upper()).text
             soup = BeautifulSoup(source, 'lxml')
             # the html class with the data is ts0 and ts1. By iterating through these we can find all the tickers with a little more scrubbing
             for x in soup.find_all('tr', class_="ts0"): #iterating through ts0 class tags
                 if len(x.text.split()) > 1: #Sometimes the data in these tags is not a ticker, usually if its shorter than 1 its not at ticker. The value of x.text.split() is the number words seperated by spaces. EX its a bat = 3
-                    ticker = pandas.DataFrame.from_dict({'ticker': [x.text.split()[len(x.text.split()) - 1]], 'exchange': ["NASDAQ"]}) #create a dataframe from the ticker, all tickers are from the nasdaq.
+                    ticker = pandas.DataFrame.from_dict({'ticker': [x.contents[1].text], 'exchange': ["NASDAQ"]}) #create a dataframe from the ticker, all tickers are from the nasdaq.
                     tickers = tickers.append(ticker) #append that df to the overall df
             #Do the same thing for the ts1 class
             for x in soup.find_all('tr', class_="ts1"):
@@ -81,3 +80,5 @@ def get_tickers_wikipedia(): #Get tickers from wikipeida
         notify("Could not get tickers for NYSE from wikipedia")
         raise e
     return tickers #return the tickers
+
+

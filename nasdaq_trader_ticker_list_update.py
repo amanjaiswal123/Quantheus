@@ -5,7 +5,7 @@ from source.AWS import *
 from data_scripts.ticker_list_streams import get_nasdaq_tickers_nasdaq_trader
 from source.Commons import notify,upload_to_rds_table
 
-# This is used to update data everyday from Alpha Vantage
+# This is used to update data everyday from nasdaq
 os.system('sudo timedatectl set-timezone America/New_York')
 while True:
     # Defining Today's Date

@@ -9,7 +9,7 @@ from sqlalchemy import create_engine
 import psycopg2
 
 
-# This is used to update data everyday from Alpha Vantage
+# This is used to update the ticker list
 os.system('sudo timedatectl set-timezone America/New_York')
 while True:
     # Defining Today's Date
