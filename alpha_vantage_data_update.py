@@ -1,4 +1,4 @@
-from data_scripts.get_data import AHistroy
+from data_scripts.get_data import alphavantage_nyse_nasdaq_download
 from datetime import datetime
 from datetime import timedelta
 import time as Time
@@ -24,17 +24,17 @@ while True:
         while True:
             try:
                 if first == True:
-                    todaydata = AHistroy(['all'], 'alpha', End_Day=Today, Days=365*60)
+                    todaydata = alphavantage_nyse_nasdaq_download()
                     pass
                 else:
-                    todaydata = AHistroy(['all'], 'alpha', Start_Day=Today,End_Day=Today)  # Get today's Data from Alpha Vantage
+                    todaydata = alphavantage_nyse_nasdaq_download()  # Get today's Data from Alpha Vantage
                     pass
                 break
             except Exception as e:
                 print("Could not download data from alpha vantage on"+Today)
                 notify("Could not download data from alpha vantage on"+Today)
                 raise e
-
+        todaydata = todaydata[todaydata['date'] == Today]
         upload_to_rds_table(todaydata,'alpha_vantage',row_by_row=True,save_errors=True)
     now = datetime.now()
     # Get the time we want to re-run the program at

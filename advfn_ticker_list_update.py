@@ -3,7 +3,7 @@ from datetime import timedelta
 import time as Time
 from source.AWS import *
 from source.Commons import upload_to_rds_table
-from data_scripts.ticker_list_streams import get_tickers_advfn
+from data_scripts.download_tickers import get_tickers_advfn
 
 # This is used to update data everyday from Alpha Vantage
 os.system('sudo timedatectl set-timezone America/New_York')

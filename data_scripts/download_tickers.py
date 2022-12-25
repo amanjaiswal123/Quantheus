@@ -1,31 +1,24 @@
-import pandas as pd
 import requests
 import pandas
 from source.Commons import notify
 from bs4 import BeautifulSoup
 import cloudscraper
 
-def _clean_data(df):
-    df = df.copy()
+def  get_nasdaq_tickers_nasdaq_trader():
+    nasdaq_listing = 'ftp://ftp.nasdaqtrader.com/symboldirectory/nasdaqlisted.txt'  # Nasdaq only
+    nasdaq = pandas.read_csv(nasdaq_listing, sep='|')
+    nasdaq = nasdaq.copy()
     # Remove test listings
-    df = df[df['Test Issue'] == 'N']
+    nasdaq = nasdaq[nasdaq['Test Issue'] == 'N']
 
     # Create New Column w/ Just Company Name
-    df['Company Name'] = df['Security Name'].apply(lambda x: x.split('-')[0]) #nasdaq file uses - to separate stock type
+    nasdaq['Company Name'] = nasdaq['Security Name'].apply(lambda x: x.split('-')[0]) #nasdaq file uses - to separate stock type
     #df['Company Name'] =
 
     # Move Company Name to 2nd Col
-    cols = list(df.columns)
+    cols = list(nasdaq.columns)
     cols.insert(1, cols.pop(-1))
-    df = df.loc[:, cols]
-
-    return df
-
-def  get_nasdaq_tickers_nasdaq_trader():
-    nasdaq_listing = 'ftp://ftp.nasdaqtrader.com/symboldirectory/nasdaqlisted.txt'  # Nasdaq only
-    nasdaq = pd.read_csv(nasdaq_listing,sep='|')
-
-    nasdaq = _clean_data(nasdaq)
+    nasdaq = nasdaq.loc[:, cols]
 
     # Create a few other data sets
     nasdaq_symbols = nasdaq[['Symbol','Company Name']] # Nasdaq  w/ 2 columns

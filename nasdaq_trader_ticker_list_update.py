@@ -2,7 +2,7 @@ from datetime import datetime
 from datetime import timedelta
 import time as Time
 from source.AWS import *
-from data_scripts.ticker_list_streams import get_nasdaq_tickers_nasdaq_trader
+from data_scripts.download_tickers import get_nasdaq_tickers_nasdaq_trader
 from source.Commons import notify,upload_to_rds_table
 
 # This is used to update data everyday from nasdaq
@@ -24,7 +24,7 @@ while True:
         print("Could not get tickers from nasdaq_trader on",datetime.now())
         notify("nasdaq trader ticker list update has failed")
         raise e
-
+    tickers = tickers[]
     upload_to_rds_table(tickers,'nasdaq_trader',schema='ticker_lists',index=['ticker','exchange'],row_by_row=True,save_errors=True)
 
     now = datetime.now()

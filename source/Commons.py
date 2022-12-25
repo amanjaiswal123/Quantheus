@@ -11,7 +11,7 @@ from warnings import warn
 from config.config import logpath
 from config.config import qtheus_rds
 from config.config import slack_token
-
+import warnings
 #This is a file which will be used to import common functions and variables that do not need thier own files
 Today = str(datetime.today().date())
 def GetTradingDays(StartDate=None,EndDate=None):
@@ -147,7 +147,6 @@ def NearestTradingDay(Day):
             ClosestTradingDay = str((datetime.strptime(Day,'%Y-%m-%d') - timedelta(days=count)).date())
     #Once the loop is satisfied by the day being a Trading Day it will return that day which will be the closest previous trading day to that date
     return ClosestTradingDay
-ClosestTradingDay = NearestTradingDay(Today)
 def _datadate(Today=str(datetime.now().date())):
     datadate = Today
     if Today in TradingDays:
@@ -318,7 +317,6 @@ def ticker_list(exchange='all'): #Get list of tickers Ticker list
         warn("You did not pass a exchange when calling get_tickers. No tickers were returned")
 
     return tickers
-
 def upload_to_rds_table(data,table:str,dbname=qtheus_rds['dbname'],user=qtheus_rds['user'],host=qtheus_rds['host'],password=qtheus_rds['password'],schema='public',remove_duplicate_rows=True,rm_duplicate_index=True,row_by_row=False,save_errors=True,index=['ticker','exchange','date']): #This function allows you to upload to a table. It also checks if the columns match and will add/delete columns as needed. THE DATAFRAME MUST BE PASSED WITHOUT AN INDEX(USE df.reset_index(inplace=True)).
     print('Uploading to rds')
     #The arguments are as follows:
@@ -392,7 +390,10 @@ def upload_to_rds_table(data,table:str,dbname=qtheus_rds['dbname'],user=qtheus_r
                 else: #upload row by row
                     if save_errors: #If we want to save errors we create the errors df from the first row of temp data and drop when saving the df to a csv
                         errors = temp_data.head(1) #Creating errors from first row of temp data
+                    total_time = []
+                    total_len = len(temp_data.index)
                     for x in temp_data.index:
+                        start = datetime.now()
                         try:
                             row = temp_data.iloc[x:x+1]
                             row.to_sql(table, conn, if_exists='append',schema=schema,index=False) #Upload entire row to rds
@@ -410,6 +411,36 @@ def upload_to_rds_table(data,table:str,dbname=qtheus_rds['dbname'],user=qtheus_r
                                 except Exception as e:
                                     print('Error adding row to errors: '+str(row[index].values)) #if we cannot add print it
                                     print('\n\n\n\nException: '+str(e)+'\n\n\n\n')
+                        end = datetime.now()
+                        total_time.append((end - start).total_seconds())
+                        if len(total_time)%(total_len/10) == 0:
+                            time_left = (total_len - len(total_time)) * (sum(total_time) / len(total_time))
+                            print('\n\n'+str(round(time_left,2)/60)+'minutes till completion\n\n')
                     if save_errors: #Saving errors to csv if save_errors argument True
                         print('errors saved to '+logpath+'errors_'+table+'_'+str(datetime.now())+'.csv')
-                        errors.drop(index=errors.head(1).index).to_csv(logpath+'errors_'+str(datetime.now())+'.csv') #Dropping first row of errors as it was arbitrarily picked from temp_data
+                 #       errors.drop(index=errors.head(1).index).to_csv(logpath+'errors_'+str(datetime.now())+'.csv') #Dropping first row of errors as it was arbitrarily picked from temp_data
+def clean_data(data,Field):
+    data.replace('', numpy.nan, inplace=True)
+    data.replace(' ', numpy.nan, inplace=True)
+    # Slicing the specified data fields if the desired fields are not valid it will ask you to re-enter valid ones
+    if 'all' not in Field:
+        while True:
+            try:
+                # Trying to slice the data
+                data = data[Field]
+                # Break out of loop is slice was succesful
+                break
+                # If it does not happen
+            except KeyError or IndexError:
+                for x in Field:
+                    if x not in data.columns.values:
+                        validF = list(data.columns)
+                        validF.remove('index')
+                        warnings.warn(x + ' is not a valid Field.' + ' Valid Fields are ' + str(validF))
+                        Field = input('\nPlease enter valid Fields with a space as the delimter: ').split()
+                        break
+    data = data[~data.index.duplicated(keep='first')]
+    data = data.apply(pandas.to_numeric, errors='coerce')
+
+    return data
+

@@ -1,11 +1,11 @@
-from data_scripts.get_data import AHistroy
+from data_scripts.get_data import tiingo_nyse_nasdaq_download
 from datetime import datetime
 from datetime import timedelta
 import time as Time
 from source.Commons import notify
 from source.AWS import *
 from source.Commons import upload_to_rds_table
-from config.config import data_logs_path
+from config.config import logpath
 firstrun = True
 first = False
 # This is used to update data everyday from tiingo
@@ -23,18 +23,18 @@ while True:
         while True:
             try:
                 if first == True:
-                    todaydata = AHistroy(['all'], 'tiingo', End_Day=Today, Days=365*60)
+                    todaydata = tiingo_nyse_nasdaq_download('tiingo', end_date=Today, days=365*60)
                     pass
                 else:
-                    todaydata = AHistroy(['all'], 'tiingo', Start_Day=Today,End_Day=Today)  # Get today's Data from tiingo
+                    todaydata = tiingo_nyse_nasdaq_download('tiingo', end_date=Today,days=Today)  # Get today's Data from tiingo
                     pass
                 break
             except Exception as e:
-                todaydata.to_csv(data_logs_path+'todaydata_tiingo_'+Today+'.csv')
+                todaydata.to_csv(log+'todaydata_tiingo_'+Today+'.csv')
                 print("Could not download data from tiingo on"+Today)
                 notify("Could not download data from tiingo on"+Today)
                 raise e
-        todaydata.to_csv(data_logs_path+'todaydata_tiingo_' + Today + '.csv')
+        todaydata.to_csv(logpath+'todaydata_tiingo_' + Today + '.csv')
         upload_to_rds_table(todaydata,'tiingo',row_by_row=True,save_errors=True)
     now = datetime.now()
     # Get the time we want to re-run the program at

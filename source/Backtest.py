@@ -1,5 +1,5 @@
 import pandas
-from data_scripts.get_data import AHistroy
+from data_scripts.get_data import get_data_rds
 from source.Commons import _datadate
 from datetime import datetime,timedelta
 from source.Commons import TradingDays
@@ -42,7 +42,7 @@ def Backtest(func,WData=['all'],End_Date=_datadate(), Start_Date=None, Days=None
         #notify('The ' + BacktestTitle + '_' + Start_Date + '-' + End_Date + ' backtest has started') #Will notify start of backtest and also end later on
 
 
-        Data = AHistroy(WData, 'rds', Start_Day=Start_Date, End_Day=End_Date) #Getting Data for the backtest
+        Data = get_data_rds(WData, Start_Day=Start_Date, End_Day=End_Date) #Getting Data for the backtest
 
 
         #Checking if we have data for the dates you specified. If we do not the backtest will not run
@@ -121,9 +121,9 @@ def Backtest(func,WData=['all'],End_Date=_datadate(), Start_Date=None, Days=None
             #After the first run we pass the previous days calculations incase the user needs yesterdays data to calculate a moving average
             SignalsStartTime = datetime.now()
             if first == True: #If it is the first run we don't have yesterdays calculations so we wont pass it
-                Signals = func(Fields,Portfolio,aval_cash,net_worth,datadate,first,None) #Getting calculations
+                Signals = func(Fields=Fields,Portfolio=Portfolio,aval_cash=aval_cash,net_worth=net_worth,datadate=datadate,first_calc=first) #Getting calculations
             else: #After the first run we will pass yesterdays calculations
-                Signals = func(Fields,Portfolio,aval_cash,net_worth,datadate,first,Signals) #Getting calculations and passing yesterdays Data
+                Signals = func(Fields=Fields,Portfolio=Portfolio,aval_cash=aval_cash,net_worth=net_worth,datadate=datadate,first_calc=first,YSignals=Signals) #Getting calculations #Getting calculations and passing yesterdays Data
             SignalsTime = datetime.now()-SignalsStartTime
             #Converting Stop Loss Percents to actual Prices and Vice Versa
 
@@ -140,7 +140,9 @@ def Backtest(func,WData=['all'],End_Date=_datadate(), Start_Date=None, Days=None
                     stop_loss = stop_loss.append(Portfolio["Stop Loss"][Portfolio["Amount Holding"] < 0] <= Portfolio["Yesterday's Adjusted Close"][Portfolio["Amount Holding"] < 0]) #Appending the Stop Loss Filter for short orders to the Stop Loss filters for long orders. We append it because now this filter will contain all Stop Loss triggers for all values in our portfolio and we do not need to deal with long and short orders separately.
                     Portfolio["Triggered Stop Loss"][stop_loss] = True #Chaning the Stop Loss value to True for all positions
                     #positions whose stop losses have been triggered and are in our portfolio but have an order placed for it are handled differently than positions whose stop loss have been triggered but not orders for it. Portions who have orders and whose stop loss has been triggered we add the amount it would take to close the positions to the quantity of the order that needs to be placed. This is because since the Stop Loss would have been triggered in the last trading day in Real Time it would have been closed already as we are now placing the order before the open of the current trading day. Therefore we just combine the act of closing(The act of closing a position is the same as as positions whose stop loss is triggered but has no order that needs to be placed and is described further in this comment) the position and placing the new order by adding them. Adding works for long and short orders because the Amount Holding of short orders will be negative so adding is the same as subtracting. For positions that have the stop loss triggered but have no orders that need to be placed. We simply close that position by multiplying the positions Amount Holding by -1 and setting that as the Quantity that needs to be placed. This works for short orders as the Amount Holding will be negative therefore when we multiply by -1 it is the inverse of the current Amount Holding and the result will be 0, or a closed position.
-                    Signals["Quantity"][Signals.index.isin(Portfolio[Portfolio["Triggered Stop Loss"] == True].index)] += Portfolio["Amount Holding"][(Portfolio["Triggered Stop Loss"] == True) & (Portfolio.index.isin(Signals.index))].rename(colums={"Amount Holding":"Quantity"})*-1 #Adding the amount needed to close the position for positions whom already have an order
+                    trgstoploss = Portfolio[["Amount Holding"]][(Portfolio["Triggered Stop Loss"] == True) & (Portfolio.index.isin(Signals.index))].rename(columns={"Amount Holding":"Quantity"})*-1
+                    if len(trgstoploss) > 0:
+                        Signals["Quantity"][Signals.index.isin(Portfolio[Portfolio["Triggered Stop Loss"] == True].index)] += trgstoploss #Adding the amount needed to close the position for positions whom already have an order
                     stop_loss_not_in_signals = Portfolio[["Amount Holding","Triggered Stop Loss"]][(Portfolio["Triggered Stop Loss"] == True) & ~Portfolio.index.isin(Signals.index)].rename(columns={"Amount Holding":"Quantity"}).copy() #Creating orders for positions who do not have an order
                     stop_loss_not_in_signals["Quantity"] = stop_loss_not_in_signals["Quantity"]*-1 #Setting the Quantity to order to the inverse of the Amount Holding so it cancels out to 0 and the position will be closed
                     stop_loss_not_in_signals["Holding Period"] = 0 #Adding this column because if it is not there when we append it changes the dtype to float which causes problems later on when adding Holding Period to find expiry
@@ -154,7 +156,9 @@ def Backtest(func,WData=['all'],End_Date=_datadate(), Start_Date=None, Days=None
                     #Positions that are expired but have an order that needs to be placed will have the amount needed to close its position added to the current order(Buy Orders will be subtracting and Short Orders will be adding as the amount needed to cover it is the inverse of the Amount Holding). Positions that have expired will simply be closed by placing an Order that is the inverse of its Amount Holding.
                     Portfolio["expired"] = False #Setting the default expiry to False
                     Portfolio["expired"][pandas.to_datetime(Portfolio["Expiry"]) <= datetime.strptime(Today,'%Y-%m-%d')] = True #Setting the expired value for Expired positions to True.
-                    Signals["Quantity"][Signals.index.isin(Portfolio[(Portfolio["expired"] == True) & (Portfolio["Triggered Stop Loss"] == False)].index)] += Portfolio["Amount Holding"][(Portfolio["expired"] == True) & (Portfolio["Triggered Stop Loss"] == False) & (Portfolio.index.isin(Signals.index))].rename(colums={"Amount Holding":"Quantity"})*-1
+                    trgstoploss = Portfolio[["Amount Holding"]][(Portfolio["Triggered Stop Loss"] == True) & (Portfolio.index.isin(Signals.index))].rename(columns={"Amount Holding": "Quantity"}) * -1
+                    if len(trgstoploss) > 0:
+                        Signals["Quantity"][Signals.index.isin(Portfolio[Portfolio["Triggered Stop Loss"] == True].index)] += trgstoploss  # Adding the amount needed to close the position for positions whom already have an order
                     expiry_not_in_signals = Portfolio[["Amount Holding","Triggered Stop Loss"]][(Portfolio["expired"] == True) & (Portfolio["Triggered Stop Loss"] == False) & ~Portfolio.index.isin(Signals.index)].rename(columns={"Amount Holding":"Quantity"}).copy() #Adding the amount needed to close the position to the current order for positions that have a current order
                     expiry_not_in_signals["Quantity"] = expiry_not_in_signals["Quantity"]*-1 #Creating Orders to close the position in our Portfolio for positions that do not have any current orders
                     expiry_not_in_signals["Holding Period"] = 0 #Adding this column because if it is not there when we append it changes the dtype to float which causes problems later on when adding Holding Period to find expiry
