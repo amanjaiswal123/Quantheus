@@ -297,7 +297,7 @@ def RemoveBadData(Data,Start_Date=None,End_Date=_datadate(Today),Days=None,Tradi
         if ~all(dates in Dates for dates in DatesCheckInTradingDays):
             Data.drop(x,inplace=True)
     return Data
-def notify(message, channel='notify'):
+def notify(message, channel='quantheus'):
     token = slack_token
     sc = WebClient(token=token)
     sc.chat_postMessage(channel=channel,text=message)
