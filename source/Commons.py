@@ -334,7 +334,7 @@ def upload_to_rds_table(data_,table:str,dbname=qtheus_rds['dbname'],user=qtheus_
     total_time_ = []
     for data in chunked_data:
         start_ = datetime.now()
-        print('\n\nFormatting #'+str(count+1)+' out of '+str(chunks)+' Total Chunks\n\n')
+        print('\n\nFormatting #'+str(count+1)+' out of '+str(chunks)+' Total Chunks')
         data.reset_index(inplace=True,drop=True)
         data.set_index(index,inplace=True)
         #The arguments are as follows:
@@ -412,7 +412,7 @@ def upload_to_rds_table(data_,table:str,dbname=qtheus_rds['dbname'],user=qtheus_
                     new_rows[col] = None
                 cd_colnames = new_rows.columns.values
                 errors = new_rows.head(1)  # Creating errors from first row of temp data
-                print("Uploading Chunk #"+str(count+1)+' out of '+str(chunks)+'Total Chunks'+" to RDS")
+                print("Uploading Chunk #"+str(count+1)+' out of '+str(chunks)+' Total Chunks'+" to RDS")
                 if not new_rows.empty: #After this scrubbing if there is still data left to be uploaded then will will upload it the specified server
                     if save_errors:  # If we want to save errors we create the errors df from the first row of temp data and drop when saving the df to a csv
                         errors = new_rows.head(1)  # Creating errors from first row of temp data
@@ -478,12 +478,11 @@ def upload_to_rds_table(data_,table:str,dbname=qtheus_rds['dbname'],user=qtheus_
                                 print('\n\n'+str(round(time_left,2)/60)+'minutes till completion\n\n')
                 if save_errors and len(errors) != 0:
                     errors_overall.append(errors)
-        print('\n\nUploaded #'+str(count+1)+' out of '+str(chunks)+' Total Chunks'+'  to RDS\n\n')
+        print('Uploaded #'+str(count+1)+' out of '+str(chunks)+' Total Chunks'+'  to RDS')
         end_ = datetime.now()
         total_time_.append((end_ - start_).total_seconds())
-        if count+1 % (chunks / 100) == 0:
-            time_left = (chunks - count+1) * (sum(total_time_) / (count+1))
-            print(str(round(time_left, 2) / 60) + ' minutes till completion')
+        time_left = (chunks - count+1) * (sum(total_time_) / (count+1))
+        print(str(round(time_left, 2) / 60) + ' minutes till completion')
         count += 1
     if save_errors: #Saving errors to csv if save_errors argument True
         print('errors saved to '+logpath+'errors_'+table+'_'+str(datetime.now())+'.csv')
