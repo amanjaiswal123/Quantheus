@@ -317,108 +317,182 @@ def ticker_list(exchange='all'): #Get list of tickers Ticker list
         warn("You did not pass a exchange when calling get_tickers. No tickers were returned")
 
     return tickers
-def upload_to_rds_table(data,table:str,dbname=qtheus_rds['dbname'],user=qtheus_rds['user'],host=qtheus_rds['host'],password=qtheus_rds['password'],schema='public',remove_duplicate_rows=True,rm_duplicate_index=True,row_by_row=False,save_errors=True,index=['ticker','exchange','date']): #This function allows you to upload to a table. It also checks if the columns match and will add/delete columns as needed. THE DATAFRAME MUST BE PASSED WITHOUT AN INDEX(USE df.reset_index(inplace=True)).
-    print('Uploading to rds')
-    #The arguments are as follows:
-        #data: a dataframe with no index.
-        #table: what is the name of the table in the your df
-        #dbname, user, host,password, are all the credentials and connection details. By default they are taken from the config file as qtheus_rds.
-        #schema: what schema is your table in
-        #remove_duplicate_rows: A bool and will remove rows with all duplicate values. It does not check the index
-        #remove_duplicate_index: A bool and will remove duplicate indexes specified in the index arguement
-        #row_by_row: Upload the dataframe row by row, if you do this and save_errors you can upload a dataframe to a table and save the rows that do not get uploaded to logpath\errors+table_name.csv
-        #save_errors: uploads a dataframe to a table and save the rows that do not get uploaded to logpath\errors+table_name.csv, if the error cannot be added to the df then print it
-        #index: the index of the dataframe, used for removing duplicate indexes. This is good for composite primary keys(primary keys based on the column values)
-    #Try conditions for connecting to db.
-    try:
-        conn = create_engine('postgresql+psycopg2://'+user+':'+password+'@'+host+'/'+dbname) #Connection to upload to database
-    except Exception as e: #catch exception and notify
-        print("Connection Error: Could not connect sql alchemy to Database "+table)
-        notify("Connection Error: Could not connect sql alchemy to Database "+table)
-        raise e
-    try:
-        p_conn = psycopg2.connect(dbname=dbname, user=user,host=host,password=password)  # Connection to get table columns as they must match
-    except Exception as e:
-        print("Connection Error: Could not connect psycopg2 to Database "+table)
-        notify("Connection Error: Could not connect psycopg2 to Database "+table)
-        raise e
-    #Removing duplicate rows/indexes
-    # Clean Old Data with New Data
-    new_rows = data
-    if remove_duplicate_rows or new_rows.empty and rm_duplicate_index: #If we want to remove duplicate rows or indexes we need to get the data from the table and compare it the data we currently have
-        query = f"SELECT * FROM {schema}.{table}"  # Construct query to get old data from database and clean it against the new data
-        dbd = pandas.read_sql(query, conn) #get data from table in df
-        if 'date' in dbd.columns.values:
-            dbd['date'] = dbd['date'].dt.strftime('%Y-%m-%d')
-        new_rows = pandas.concat([data, dbd]) #combine the data we have and the data in the table. We can now use .drop_duplicates and .duplicated on the combined df to get only the rows not in the table
-        new_rows = pandas.concat([new_rows, dbd]) #We concat the database data twice because when we scan for duplicates all the rows from the db will automaticlly be dropped as they were added twice
-    if remove_duplicate_rows: #if the remove_duplicate_rows argument is True then we will drop duplicate rows
-        new_rows['duplicated'] = new_rows.index.duplicated(keep=False)
-        new_rows = new_rows[new_rows['duplicated'] == False]  # Removing Duplicate Rows
-    if not new_rows.empty: #After the scrubbing continue if the df is not empty
-        if rm_duplicate_index: #if the rm_duplicate_index argument is True then duplicate indexes will be removed.
-            new_rows = new_rows.set_index(index) #set the index to the index specified in the index argument
-            new_rows['duplicated'] = new_rows.index.duplicated(keep=False)
-            new_rows = new_rows[new_rows['duplicated'] == False]  # Removing Duplicate Indexes
-        new_rows = new_rows.reset_index() #reseting index again
-        if not new_rows.empty:
-            # Checking table for columns, if the columns do not match exactly an error will be raised.
-            curr = p_conn.cursor()
-            #Get Columns in db
-            curr.execute(f"Select * FROM {schema}.{table} LIMIT 0")
-            db_colnames = [desc[0] for desc in curr.description]
-            curr.close()
-            # Get Columns in current df
-            cd_colnames = new_rows.columns.values
+def upload_to_rds_table(data_,table:str,dbname=qtheus_rds['dbname'],user=qtheus_rds['user'],host=qtheus_rds['host'],password=qtheus_rds['password'],schema='public',remove_duplicate_rows=True,rm_duplicate_index=True,row_by_row=False,save_errors=True,chunks=1,index=['ticker','exchange','date']): #This function allows you to upload to a table. It also checks if the columns match and will add/delete columns as needed. THE DATAFRAME MUST BE PASSED WITHOUT AN INDEX(USE df.reset_index(inplace=True)).
+    total_len = len(data_)
+    if chunks < total_len:
+        if total_len % chunks != 0:
+            while total_len % chunks != 0:
+                chunks -= 1
+    else:
+        chunks = 1
+    chunked_data = numpy.split(data_, chunks)
+    del data_
+    total_len = len(chunked_data)
+    errors_overall = []
+    print('\n\nStarting Upload of Data\n\n')
+    count = 0
+    total_time_ = []
+    for data in chunked_data:
+        start_ = datetime.now()
+        print('\n\nFormatting #'+str(count+1)+' out of '+str(chunks)+' Total Chunks\n\n')
+        data.reset_index(inplace=True,drop=True)
+        data.set_index(index,inplace=True)
+        #The arguments are as follows:
+            #data: a dataframe with no index.
+            #table: what is the name of the table in the your df
+            #dbname, user, host,password, are all the credentials and connection details. By default they are taken from the config file as qtheus_rds.
+            #schema: what schema is your table in
+            #remove_duplicate_rows: A bool and will remove rows with all duplicate values. It does not check the index
+            #remove_duplicate_index: A bool and will remove duplicate indexes specified in the index arguement
+            #chunks: A int and will break the data to be uploaded into the pre-defined amount of chunks
+            #row_by_row: Upload the dataframe row by row, if you do this and save_errors you can upload a dataframe to a table and save the rows that do not get uploaded to logpath\errors+table_name.csv
+            #save_errors: uploads a dataframe to a table and save the rows that do not get uploaded to logpath\errors+table_name.csv, if the error cannot be added to the df then print it
+            #index: the index of the dataframe, used for removing duplicate indexes. This is good for composite primary keys(primary keys based on the column values)
+        #Try conditions for connecting to db.
+        try:
+            conn = create_engine('postgresql+psycopg2://'+user+':'+password+'@'+host+'/'+dbname) #Connection to upload to database
+        except Exception as e: #catch exception and notify
+            print("Connection Error: Could not connect sql alchemy to Database "+table)
+            notify("Connection Error: Could not connect sql alchemy to Database "+table)
+            raise e
+        try:
+            p_conn = psycopg2.connect(dbname=dbname, user=user,host=host,password=password)  # Connection to get table columns as they must match
+        except Exception as e:
+            print("Connection Error: Could not connect psycopg2 to Database "+table)
+            notify("Connection Error: Could not connect psycopg2 to Database "+table)
+            raise e
+        #Removing duplicate rows/indexes
+        # Clean Old Data with New Data
+        new_rows = data
+        del data
+        if (~new_rows.empty and remove_duplicate_rows) or (~new_rows.empty and rm_duplicate_index): #If we want to remove duplicate rows or indexes we need to get the data from the table and compare it the data we currently have
+            if "date" in index:
+                min_date = new_rows.index.levels[index.index('date')].min()
+                max_date = new_rows.index.levels[index.index('date')].max()
+                query = f"SELECT * FROM {schema}.{table} where date >= TO_DATE('{min_date}', 'YYYY-MM-DD') and date <= TO_DATE('{max_date}', 'YYYY-MM-DD')"
+            elif "dat" in index:
+                min_date = new_rows.index.levels[index.index('dat')].min()
+                max_date = new_rows.index.levels[index.index('dat')].max()
+                query = f"SELECT * FROM {schema}.{table} where date >= TO_DATE('{min_date}', 'YYYY-MM-DD') and date <= TO_DATE('{max_date}', 'YYYY-MM-DD')"
+            else:
+                query = f"SELECT * FROM {schema}.{table}"
+      # Construct query to get old data from database and clean it against the new data
+            dbd = pandas.read_sql(query, conn) #get data from table in df
+            if 'date' in index:
+                dbd['date'] = dbd['date'].dt.strftime('%Y-%m-%d')
+            dbd.reset_index(inplace=True, drop=True)
+            dbd.set_index(index, inplace=True)
+            new_rows = pandas.concat([new_rows, dbd]) #combine the data we have and the data in the table. We can now use .drop_duplicates and .duplicated on the combined df to get only the rows not in the table
+            new_rows = pandas.concat([new_rows, dbd]) #We concat the database data twice because when we scan for duplicates all the rows from the db will automaticlly be dropped as they were added twice
+            del dbd
+        if remove_duplicate_rows: #if the remove_duplicate_rows argument is True then we will drop duplicate rows
+            new_rows['duplicated'] = new_rows.duplicated(keep=False)
+            new_rows = new_rows[new_rows['duplicated'] == False]  # Removing Duplicate Rows
+        if not new_rows.empty: #After the scrubbing continue if the df is not empty
+            if rm_duplicate_index: #if the rm_duplicate_index argument is True then duplicate indexes will be removed.
+                new_rows['duplicated'] = new_rows.index.duplicated(keep=False)
+                new_rows = new_rows[new_rows['duplicated'] == False]  # Removing Duplicate Indexes
+            new_rows = new_rows.reset_index() #reseting index again
+            if not new_rows.empty:
+                # Checking table for columns, if the columns do not match exactly an error will be raised.
+                curr = p_conn.cursor()
+                #Get Columns in db
+                curr.execute(f"Select * FROM {schema}.{table} LIMIT 0")
+                db_colnames = [desc[0] for desc in curr.description]
+                curr.close()
+                # Get Columns in current df
+                cd_colnames = new_rows.columns.values
 
-            # Find Diffrent Columns
-            diffrent_columns = numpy.setdiff1d(cd_colnames, db_colnames)
-
-            temp_data = new_rows.drop(columns=diffrent_columns).copy() #drop the diffrent columns
-            cd_colnames = temp_data.columns.values #Get column values again
-            missing_columns = numpy.setdiff1d(db_colnames, cd_colnames) #Find missing columns
-            for col in missing_columns: #add the missing columns
-                temp_data[col] = None
-            if not temp_data.empty: #After this scrubbing if there is still data left to be uploaded then will will upload it the specified server
-                if not row_by_row: #Upload at once
-                    try:
-                        temp_data.to_sql(table, conn, if_exists='append',schema=schema,index=False)  # Uploading to rds instance
-                    except Exception as e:
-                        print("Connection Error: Could not upload to "+table)
-                        notify("Connection Error: Could not upload to "+table)
-                        raise e
-                else: #upload row by row
-                    if save_errors: #If we want to save errors we create the errors df from the first row of temp data and drop when saving the df to a csv
-                        errors = temp_data.head(1) #Creating errors from first row of temp data
+                # Find Diffrent Columns
+                diffrent_columns = numpy.setdiff1d(cd_colnames, db_colnames)
+                new_rows = new_rows.drop(columns=diffrent_columns).copy() #drop the diffrent columns
+                cd_colnames = new_rows.columns.values #Get column values again
+                missing_columns = numpy.setdiff1d(db_colnames, cd_colnames) #Find missing columns
+                for col in missing_columns: #add the missing columns
+                    new_rows[col] = None
+                cd_colnames = new_rows.columns.values
+                errors = new_rows.head(1)  # Creating errors from first row of temp data
+                print("Uploading Chunk #"+str(count+1)+' out of '+str(chunks)+'Total Chunks'+" to RDS")
+                if not new_rows.empty: #After this scrubbing if there is still data left to be uploaded then will will upload it the specified server
+                    if save_errors:  # If we want to save errors we create the errors df from the first row of temp data and drop when saving the df to a csv
+                        errors = new_rows.head(1)  # Creating errors from first row of temp data
                     total_time = []
-                    total_len = len(temp_data.index)
-                    for x in temp_data.index:
+                    total_len = len(new_rows)
+                    if not row_by_row: #Upload at once
                         start = datetime.now()
                         try:
-                            row = temp_data.iloc[x:x+1]
-                            row.to_sql(table, conn, if_exists='append',schema=schema,index=False) #Upload entire row to rds
-                            print("Uploaded "+str(row[index].values))
+                            new_rows.to_sql(table, conn, if_exists='append',schema=schema,index=False)  # Uploading to rds instance
                         except Exception as e:
-                            if not save_errors: #if we are not saving the errors raise it
-                                print("Connection Error: Could not upload to "+table)
-                                notify("Connection Error: Could not upload to "+table)
-                                raise e
-                            else: #if we are saving errors do not raise the error rather add it to a df, if the error cannot be added to the df then print it
+                            print("Connection Error: Could not upload to "+table)
+                            notify("Connection Error: Could not upload to "+table)
+                            print('\n\nTrying to Upload Row By Row\n\n')
+                            total_len = len(new_rows.index)
+                            for y in new_rows.index:
                                 try:
-                                    print("Error with "+str(row[index].values))
-                                    print("Exception "+str(e))
-                                    errors = errors.append(row[index].values) #add error to errors
+                                    row = new_rows.iloc[y:y + 1]
+                                    row.to_sql(table, conn, if_exists='append', schema=schema,ndex=False)  # Upload entire row to rds
+                                    print("Uploaded " + str(row[index].values))
                                 except Exception as e:
-                                    print('Error adding row to errors: '+str(row[index].values)) #if we cannot add print it
-                                    print('\n\n\n\nException: '+str(e)+'\n\n\n\n')
-                        end = datetime.now()
-                        total_time.append((end - start).total_seconds())
-                        if len(total_time)%(total_len/10) == 0:
-                            time_left = (total_len - len(total_time)) * (sum(total_time) / len(total_time))
-                            print('\n\n'+str(round(time_left,2)/60)+'minutes till completion\n\n')
-                    if save_errors: #Saving errors to csv if save_errors argument True
-                        print('errors saved to '+logpath+'errors_'+table+'_'+str(datetime.now())+'.csv')
-                 #       errors.drop(index=errors.head(1).index).to_csv(logpath+'errors_'+str(datetime.now())+'.csv') #Dropping first row of errors as it was arbitrarily picked from temp_data
+                                    if not save_errors:  # if we are not saving the errors raise it
+                                        print("Connection Error: Could not upload to " + table)
+                                        notify("Connection Error: Could not upload to " + table)
+                                        raise e
+                                    else:  # if we are saving errors do not raise the error rather add it to a df, if the error cannot be added to the df then print it
+                                        try:
+                                            print("Error with " + str(row[index].values))
+                                            print("Exception " + str(e))
+                                            errors = errors.append(row[index].values)  # add error to errors
+                                        except Exception as e:
+                                            print('Error adding row to errors: ' + str(row[index].values))  # if we cannot add print it
+                                            print('\n\n\n\nException: ' + str(e) + '\n\n\n\n')
+                            end = datetime.now()
+                            total_time.append((end - start).total_seconds())
+                            if len(total_time)%(total_len/10) == 0:
+                                time_left = (total_len - len(total_time)) * (sum(total_time) / len(total_time))
+                                print('\n\n'+str(round(time_left,2)/60)+'minutes till completion\n\n')
+                    else: #upload row by row
+                        total_len = len(new_rows.index)
+                        for x in new_rows.index:
+                            start = datetime.now()
+                            try:
+                                row = new_rows.iloc[x:x+1]
+                                row.to_sql(table, conn, if_exists='append',schema=schema,index=False) #Upload entire row to rds
+                                print("Uploaded "+str(row[index].values))
+                            except Exception as e:
+                                if not save_errors: #if we are not saving the errors raise it
+                                    print("Connection Error: Could not upload to "+table)
+                                    notify("Connection Error: Could not upload to "+table)
+                                    raise e
+                                else: #if we are saving errors do not raise the error rather add it to a df, if the error cannot be added to the df then print it
+                                    try:
+                                        print("Error with "+str(row[index].values))
+                                        print("Exception "+str(e))
+                                        errors = errors.append(row[index].values) #add error to errors
+                                    except Exception as e:
+                                        print('Error adding row to errors: '+str(row[index].values)) #if we cannot add print it
+                                        print('\n\n\n\nException: '+str(e)+'\n\n\n\n')
+                            end = datetime.now()
+                            total_time.append((end - start).total_seconds())
+                            if len(total_time)%(total_len/10) == 0:
+                                time_left = (total_len - len(total_time)) * (sum(total_time) / len(total_time))
+                                print('\n\n'+str(round(time_left,2)/60)+'minutes till completion\n\n')
+                if save_errors and len(errors) != 0:
+                    errors_overall.append(errors)
+        print('\n\nUploaded #'+str(count+1)+' out of '+str(chunks)+' Total Chunks'+'  to RDS\n\n')
+        end_ = datetime.now()
+        total_time_.append((end_ - start_).total_seconds())
+        if count+1 % (chunks / 100) == 0:
+            time_left = (chunks - count+1) * (sum(total_time_) / (count+1))
+            print(str(round(time_left, 2) / 60) + ' minutes till completion')
+        count += 1
+    if save_errors: #Saving errors to csv if save_errors argument True
+        print('errors saved to '+logpath+'errors_'+table+'_'+str(datetime.now())+'.csv')
+        try:
+            errors_overall = pandas.concat(errors_overall)
+            errors_overall.drop(index=errors.head(1).index).to_csv(logpath+'errors_'+str(datetime.now().date())+'.csv') #Dropping first row of errors as it was arbitrarily picked from temp_data
+        except Exception as e:
+            print('\n\n\nEXCEPTION\n\n\n')
+    print('\n\nUploaded All to RDS\n\n')
 def clean_data(data,Field):
     data.replace('', numpy.nan, inplace=True)
     data.replace(' ', numpy.nan, inplace=True)
