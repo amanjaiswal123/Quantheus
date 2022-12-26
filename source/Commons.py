@@ -447,14 +447,17 @@ def upload_to_rds_table(data_,table:str,dbname=qtheus_rds['dbname'],user=qtheus_
                                             print('Error adding row to errors: ' + str(row[index].values))  # if we cannot add print it
                                             print('\n\n\n\nException: ' + str(e) + '\n\n\n\n')
                                 row_end = datetime.now()
-                                total_time_row.append((row_end - row_start).total_seconds())
+                                total_time = (row_end - row_start).total_seconds()
+                                avg_time = (sum(total_time_row) / len(total_time_row))
+                                total_time_row.append(total_time)
                                 uploaded_rows += 1
                                 if len(total_time_row) % 100 == 0:
-                                    time_left = (chunk_total_len - len(total_time_row)) * (sum(total_time_row) / len(total_time_row))
-                                    print(str(round(time_left, 2) / 60) + 'minutes till completion for row by row for Chunk #'+str(count+1)+' out of '+str(chunks)+' Total Chunks, '+' Rows Uploaded: '+str(uploaded_rows)+', Rows Not Uploaded:',str(not_uploaded_rows))
-                    else: #upload row by row
+                                    row_num = len(total_time_row)
+                                    time_left = (chunk_total_len - row_num) * avg_time
+                                    print('Upload took',str(total_time),'Seconds'+', '+'Average Upload Time:',str(avg_time)+' Seconds, '+str(round(time_left, 2) / 60) + 'minutes till completion for row #'+str(row_num)+' out of'+str(chunk_total_len)+'rows for Chunk #'+str(count+1)+' out of '+str(chunks)+' Total Chunks, '+' Rows Uploaded: '+str(uploaded_rows)+', Rows Not Uploaded:',str(not_uploaded_rows))
                         chunk_total_len = len(new_rows.index)
                         row_total_time = []
+                    else:
                         for x in new_rows.index:
                             row_start = datetime.now()
                             try:
@@ -474,19 +477,24 @@ def upload_to_rds_table(data_,table:str,dbname=qtheus_rds['dbname'],user=qtheus_
                                         print('Error adding row to errors: '+str(row[index].values)) #if we cannot add print it
                                         print('\n\n\n\nException: '+str(e)+'\n\n\n\n')
                             row_end = datetime.now()
+                            total_time = (row_end - row_start).total_seconds()
                             row_total_time.append((row_end - row_start).total_seconds())
                             uploaded_rows += 1
                             if len(row_total_time)%100 == 0:
-                                time_left = (chunk_total_len - len(row_total_time)) * (sum(row_total_time) / len(row_total_time))
-                                print(str(round(time_left, 2) / 60) + 'minutes till completion for Chunk #'+str(count+1)+' out of '+str(chunks)+' Total Chunks, '+' Rows Uploaded: '+str(uploaded_rows)+', Rows Not Uploaded:',str(not_uploaded_rows))
+                                avg_time = (sum(row_total_time) / len(row_total_time))
+                                row_num = len(row_total_time)
+                                time_left = (chunk_total_len - row_num)*avg_time
+                                print('Upload took',str(total_time),'Seconds'+', '+'Average Upload Time:',str(avg_time)+' Seconds, '+str(round(time_left, 2) / 60) + 'minutes till completion for row #'+str(row_num)+' out of'+str(chunk_total_len)+'rows for Chunk #'+str(count+1)+' out of '+str(chunks)+' Total Chunks, '+' Rows Uploaded: '+str(uploaded_rows)+', Rows Not Uploaded:',str(not_uploaded_rows))
                 if save_errors and len(errors) != 0:
                     errors_overall.append(errors)
         not_uploaded_rows += total_rows_chunk-(uploaded_rows-uploaded_rows_before)
         print('Uploaded #'+str(count+1)+' out of '+str(chunks)+' Total Chunks, '+' Rows Uploaded: '+str(uploaded_rows),', Rows Not Uploaded:',str(not_uploaded_rows))
         end_ = datetime.now()
-        total_time_.append((end_ - start_).total_seconds())
-        time_left = (chunks - count+1) * (sum(total_time_) / (count+1))
-        print(str(round(time_left, 2) / 60) + ' minutes till upload of all chunks')
+        total_time = (end_ - start_).total_seconds()
+        total_time_.append(total_time)
+        avg_time = (sum(total_time_) / (count+1))
+        time_left = (chunks - count+1) * avg_time
+        print('Upload took',str(total_time),'Seconds, Average Upload Time:',str(avg_time),'Seconds'+', '+str(round(time_left, 2) / 60) + ' minutes till upload of all chunks')
         count += 1
     if save_errors: #Saving errors to csv if save_errors argument True
         print('errors saved to '+logpath+'errors_'+table+'_'+str(datetime.now())+'.csv')
