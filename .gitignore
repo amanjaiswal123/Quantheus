@@ -7,3 +7,4 @@ test.py
 *.csv
 /Algos
 /Algos/*
+*/test.py
