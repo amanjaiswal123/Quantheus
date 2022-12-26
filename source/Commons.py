@@ -12,6 +12,8 @@ from config.config import logpath
 from config.config import qtheus_rds
 from config.config import slack_token
 import warnings
+
+
 #This is a file which will be used to import common functions and variables that do not need thier own files
 Today = str(datetime.today().date())
 def GetTradingDays(StartDate=None,EndDate=None):
@@ -318,49 +320,46 @@ def ticker_list(exchange='all'): #Get list of tickers Ticker list
 
     return tickers
 def upload_to_rds_table(data_,table:str,dbname=qtheus_rds['dbname'],user=qtheus_rds['user'],host=qtheus_rds['host'],password=qtheus_rds['password'],schema='public',remove_duplicate_rows=True,rm_duplicate_index=True,row_by_row=False,save_errors=True,chunks=1,index=['ticker','exchange','date']): #This function allows you to upload to a table. It also checks if the columns match and will add/delete columns as needed. THE DATAFRAME MUST BE PASSED WITHOUT AN INDEX(USE df.reset_index(inplace=True)).
+    # The arguments are as follows:
+    # data: a dataframe with no index.
+    # table: what is the name of the table in the your df
+    # dbname, user, host,password, are all the credentials and connection details. By default they are taken from the config file as qtheus_rds.
+    # schema: what schema is your table in
+    # remove_duplicate_rows: A bool and will remove rows with all duplicate values. It does not check the index
+    # remove_duplicate_index: A bool and will remove duplicate indexes specified in the index arguement
+    # chunks: A int and will break the data to be uploaded into the pre-defined amount of chunks
+    # row_by_row: Upload the dataframe row by row, if you do this and save_errors you can upload a dataframe to a table and save the rows that do not get uploaded to logpath\errors+table_name.csv
+    # save_errors: uploads a dataframe to a table and save the rows that do not get uploaded to logpath\errors+table_name.csv, if the error cannot be added to the df then print it
+    # index: the index of the dataframe, used for removing duplicate indexes. This is good for composite primary keys(primary keys based on the column values)
+    # Try conditions for connecting to db.
     total_len = len(data_)
-    if chunks < total_len:
-        if total_len % chunks != 0:
-            while total_len % chunks != 0:
-                chunks -= 1
-    else:
-        chunks = 1
-    chunked_data = numpy.split(data_, chunks)
+    chunked_data = numpy.array_split(data_,chunks)
     del data_
     total_len = len(chunked_data)
     errors_overall = []
     print('\n\nStarting Upload of Data\n\n')
     count = 0
     total_time_ = []
+    try:
+        conn = create_engine(
+            'postgresql+psycopg2://' + user + ':' + password + '@' + host + '/' + dbname)  # Connection to upload to database
+    except Exception as e:  # catch exception and notify
+        print("Connection Error: Could not connect sql alchemy to Database " + table)
+        notify("Connection Error: Could not connect sql alchemy to Database " + table)
+        raise e
+    try:
+        p_conn = psycopg2.connect(dbname=dbname, user=user, host=host,
+                                  password=password)  # Connection to get table columns as they must match
+    except Exception as e:
+        print("Connection Error: Could not connect psycopg2 to Database " + table)
+        notify("Connection Error: Could not connect psycopg2 to Database " + table)
+        raise e
     for data in chunked_data:
         start_ = datetime.now()
         print('\n\nFormatting #'+str(count+1)+' out of '+str(chunks)+' Total Chunks')
         data.reset_index(inplace=True,drop=True)
         data.set_index(index,inplace=True)
-        #The arguments are as follows:
-            #data: a dataframe with no index.
-            #table: what is the name of the table in the your df
-            #dbname, user, host,password, are all the credentials and connection details. By default they are taken from the config file as qtheus_rds.
-            #schema: what schema is your table in
-            #remove_duplicate_rows: A bool and will remove rows with all duplicate values. It does not check the index
-            #remove_duplicate_index: A bool and will remove duplicate indexes specified in the index arguement
-            #chunks: A int and will break the data to be uploaded into the pre-defined amount of chunks
-            #row_by_row: Upload the dataframe row by row, if you do this and save_errors you can upload a dataframe to a table and save the rows that do not get uploaded to logpath\errors+table_name.csv
-            #save_errors: uploads a dataframe to a table and save the rows that do not get uploaded to logpath\errors+table_name.csv, if the error cannot be added to the df then print it
-            #index: the index of the dataframe, used for removing duplicate indexes. This is good for composite primary keys(primary keys based on the column values)
-        #Try conditions for connecting to db.
-        try:
-            conn = create_engine('postgresql+psycopg2://'+user+':'+password+'@'+host+'/'+dbname) #Connection to upload to database
-        except Exception as e: #catch exception and notify
-            print("Connection Error: Could not connect sql alchemy to Database "+table)
-            notify("Connection Error: Could not connect sql alchemy to Database "+table)
-            raise e
-        try:
-            p_conn = psycopg2.connect(dbname=dbname, user=user,host=host,password=password)  # Connection to get table columns as they must match
-        except Exception as e:
-            print("Connection Error: Could not connect psycopg2 to Database "+table)
-            notify("Connection Error: Could not connect psycopg2 to Database "+table)
-            raise e
+
         #Removing duplicate rows/indexes
         # Clean Old Data with New Data
         new_rows = data
@@ -423,14 +422,14 @@ def upload_to_rds_table(data_,table:str,dbname=qtheus_rds['dbname'],user=qtheus_
                         try:
                             new_rows.to_sql(table, conn, if_exists='append',schema=schema,index=False)  # Uploading to rds instance
                         except Exception as e:
-                            print("Connection Error: Could not upload to "+table)
-                            notify("Connection Error: Could not upload to "+table)
+                            print("Connection Error: Could not upload to \n"+table+str(e))
+                            notify("Connection Error: Could not upload to \n"+table+str(e))
                             print('\n\nTrying to Upload Row By Row\n\n')
                             total_len = len(new_rows.index)
                             for y in new_rows.index:
                                 try:
                                     row = new_rows.iloc[y:y + 1]
-                                    row.to_sql(table, conn, if_exists='append', schema=schema,ndex=False)  # Upload entire row to rds
+                                    row.to_sql(table, conn, if_exists='append', schema=schema,index=False)  # Upload entire row to rds
                                     print("Uploaded " + str(row[index].values))
                                 except Exception as e:
                                     if not save_errors:  # if we are not saving the errors raise it
