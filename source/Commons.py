@@ -332,10 +332,9 @@ def upload_to_rds_table(data_,table:str,dbname=qtheus_rds['dbname'],user=qtheus_
     # save_errors: uploads a dataframe to a table and save the rows that do not get uploaded to logpath\errors+table_name.csv, if the error cannot be added to the df then print it
     # index: the index of the dataframe, used for removing duplicate indexes. This is good for composite primary keys(primary keys based on the column values)
     # Try conditions for connecting to db.
-    total_len = len(data_)
     chunked_data = numpy.array_split(data_,chunks)
     del data_
-    total_len = len(chunked_data)
+    chunk_total_len = len(chunked_data)
     errors_overall = []
     print('\n\nStarting Upload of Data\n\n')
     count = 0
@@ -354,7 +353,10 @@ def upload_to_rds_table(data_,table:str,dbname=qtheus_rds['dbname'],user=qtheus_
         print("Connection Error: Could not connect psycopg2 to Database " + table)
         notify("Connection Error: Could not connect psycopg2 to Database " + table)
         raise e
+    uploaded_rows = 0
+    not_uploaded_rows = 0
     for data in chunked_data:
+        total_rows_chunk = len(data)
         start_ = datetime.now()
         print('\n\nFormatting #'+str(count+1)+' out of '+str(chunks)+' Total Chunks')
         data.reset_index(inplace=True,drop=True)
@@ -363,6 +365,7 @@ def upload_to_rds_table(data_,table:str,dbname=qtheus_rds['dbname'],user=qtheus_
         #Removing duplicate rows/indexes
         # Clean Old Data with New Data
         new_rows = data
+        uploaded_rows_before = uploaded_rows
         del data
         if (~new_rows.empty and remove_duplicate_rows) or (~new_rows.empty and rm_duplicate_index): #If we want to remove duplicate rows or indexes we need to get the data from the table and compare it the data we currently have
             if "date" in index:
@@ -411,26 +414,25 @@ def upload_to_rds_table(data_,table:str,dbname=qtheus_rds['dbname'],user=qtheus_
                     new_rows[col] = None
                 cd_colnames = new_rows.columns.values
                 errors = new_rows.head(1)  # Creating errors from first row of temp data
+                uploaded_rows_before = uploaded_rows
                 print("Uploading Chunk #"+str(count+1)+' out of '+str(chunks)+' Total Chunks'+" to RDS")
                 if not new_rows.empty: #After this scrubbing if there is still data left to be uploaded then will will upload it the specified server
                     if save_errors:  # If we want to save errors we create the errors df from the first row of temp data and drop when saving the df to a csv
                         errors = new_rows.head(1)  # Creating errors from first row of temp data
-                    total_time = []
-                    total_len = len(new_rows)
                     if not row_by_row: #Upload at once
-                        start = datetime.now()
                         try:
                             new_rows.to_sql(table, conn, if_exists='append',schema=schema,index=False)  # Uploading to rds instance
+                            uploaded_rows += len(new_rows)
                         except Exception as e:
                             print("Connection Error: Could not upload to \n"+table+str(e))
                             notify("Connection Error: Could not upload to \n"+table+str(e))
                             print('\n\nTrying to Upload Row By Row\n\n')
-                            total_len = len(new_rows.index)
+                            total_time_row = []
                             for y in new_rows.index:
+                                row_start = datetime.now()
                                 try:
                                     row = new_rows.iloc[y:y + 1]
                                     row.to_sql(table, conn, if_exists='append', schema=schema,index=False)  # Upload entire row to rds
-                                    print("Uploaded " + str(row[index].values))
                                 except Exception as e:
                                     if not save_errors:  # if we are not saving the errors raise it
                                         print("Connection Error: Could not upload to " + table)
@@ -444,19 +446,20 @@ def upload_to_rds_table(data_,table:str,dbname=qtheus_rds['dbname'],user=qtheus_
                                         except Exception as e:
                                             print('Error adding row to errors: ' + str(row[index].values))  # if we cannot add print it
                                             print('\n\n\n\nException: ' + str(e) + '\n\n\n\n')
-                            end = datetime.now()
-                            total_time.append((end - start).total_seconds())
-                            if len(total_time)%(total_len/10) == 0:
-                                time_left = (total_len - len(total_time)) * (sum(total_time) / len(total_time))
-                                print('\n\n'+str(round(time_left,2)/60)+'minutes till completion\n\n')
+                                row_end = datetime.now()
+                                total_time_row.append((row_end - row_start).total_seconds())
+                                uploaded_rows += 1
+                                if len(total_time_row) % 100 == 0:
+                                    time_left = (chunk_total_len - len(total_time_row)) * (sum(total_time_row) / len(total_time_row))
+                                    print(str(round(time_left, 2) / 60) + 'minutes till completion for row by row for Chunk #'+str(count+1)+' out of '+str(chunks)+' Total Chunks, '+' Rows Uploaded: '+str(uploaded_rows)+', Rows Not Uploaded:',str(not_uploaded_rows))
                     else: #upload row by row
-                        total_len = len(new_rows.index)
+                        chunk_total_len = len(new_rows.index)
+                        row_total_time = []
                         for x in new_rows.index:
-                            start = datetime.now()
+                            row_start = datetime.now()
                             try:
                                 row = new_rows.iloc[x:x+1]
                                 row.to_sql(table, conn, if_exists='append',schema=schema,index=False) #Upload entire row to rds
-                                print("Uploaded "+str(row[index].values))
                             except Exception as e:
                                 if not save_errors: #if we are not saving the errors raise it
                                     print("Connection Error: Could not upload to "+table)
@@ -470,18 +473,20 @@ def upload_to_rds_table(data_,table:str,dbname=qtheus_rds['dbname'],user=qtheus_
                                     except Exception as e:
                                         print('Error adding row to errors: '+str(row[index].values)) #if we cannot add print it
                                         print('\n\n\n\nException: '+str(e)+'\n\n\n\n')
-                            end = datetime.now()
-                            total_time.append((end - start).total_seconds())
-                            if len(total_time)%(total_len/10) == 0:
-                                time_left = (total_len - len(total_time)) * (sum(total_time) / len(total_time))
-                                print('\n\n'+str(round(time_left,2)/60)+'minutes till completion\n\n')
+                            row_end = datetime.now()
+                            row_total_time.append((row_end - row_start).total_seconds())
+                            uploaded_rows += 1
+                            if len(row_total_time)%100 == 0:
+                                time_left = (chunk_total_len - len(row_total_time)) * (sum(row_total_time) / len(row_total_time))
+                                print(str(round(time_left, 2) / 60) + 'minutes till completion for Chunk #'+str(count+1)+' out of '+str(chunks)+' Total Chunks, '+' Rows Uploaded: '+str(uploaded_rows)+', Rows Not Uploaded:',str(not_uploaded_rows))
                 if save_errors and len(errors) != 0:
                     errors_overall.append(errors)
-        print('Uploaded #'+str(count+1)+' out of '+str(chunks)+' Total Chunks'+'  to RDS')
+        not_uploaded_rows += total_rows_chunk-(uploaded_rows-uploaded_rows_before)
+        print('Uploaded #'+str(count+1)+' out of '+str(chunks)+' Total Chunks, '+' Rows Uploaded: '+str(uploaded_rows),', Rows Not Uploaded:',str(not_uploaded_rows))
         end_ = datetime.now()
         total_time_.append((end_ - start_).total_seconds())
         time_left = (chunks - count+1) * (sum(total_time_) / (count+1))
-        print(str(round(time_left, 2) / 60) + ' minutes till completion')
+        print(str(round(time_left, 2) / 60) + ' minutes till upload of all chunks')
         count += 1
     if save_errors: #Saving errors to csv if save_errors argument True
         print('errors saved to '+logpath+'errors_'+table+'_'+str(datetime.now())+'.csv')
