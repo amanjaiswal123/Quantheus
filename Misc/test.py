@@ -44,19 +44,21 @@ Calculate slippage given level 2 market data
   """
   return midpoint - (bid + ask) / 2
 
-Data = pandas.read_csv('C:/Users/Aman Jaiswal/PycharmProjects/Quantheus/Data/MarketData/BacktestData_2022-12-24.csv')
+headers = pandas.read_csv('C:/Users/Aman Jaiswal/PycharmProjects/Quantheus/Data/MarketData/BacktestData_2022-12-24.csv',nrows=1)
+Data = pandas.read_csv('C:/Users/Aman Jaiswal/PycharmProjects/Quantheus/Data/MarketData/BacktestData_2022-12-24.csv',skiprows=5310984)
+Data.columns = headers.columns
 Data['adj_open'] = (Data['adj_close'] / Data['close']) * Data['open']
 #    conn = psycopg2.connect(dbname='postgres', user=qtheus_rds['user'],host=qtheus_rds['host'], password=qtheus_rds['password'])
  #   Data = pandas.read_sql("""SELECT * FROM alpha_vantage WHERE date >= %s and date <= %s""",conn,params=(Start_Day,End_Day))
  #   Data["date"] = Data["dat"].astype(str)
    # Data = Data.rename(columns={'date':'dat'})
 Data = Data.sort_values('dat')
-Data = Data[Data['dat'] > '2020-07-23']
+#Data = Data[Data['dat'] > '2020-07-23']
 Data = Data.rename(columns={'dat':'date'})
 #Slicing Data so you get the data between the dates you asked for
 Data.replace('', numpy.nan, inplace=True)
 Data.replace(' ', numpy.nan, inplace=True)
 #Slicing the specified data fields if the desired fields are not valid it will ask you to re-enter valid ones
-upload_to_rds_table(Data,'alpha_vantage',row_by_row=True,save_errors=True,remove_duplicate_rows=True)
+upload_to_rds_table(Data,'alpha_vantage',save_errors=True,rm_duplicate_index=True,remove_duplicate_rows=False,chunks=1000)
 
 
