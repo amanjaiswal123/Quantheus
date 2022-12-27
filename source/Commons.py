@@ -447,6 +447,7 @@ def upload_to_rds_table(data_,table:str,dbname=qtheus_rds['dbname'],user=qtheus_
                                 try:
                                     row = new_rows.iloc[y:y + 1]
                                     row.to_sql(table, conn, if_exists='append', schema=schema,index=False)  # Upload entire row to rds
+                                    uploaded_rows += 1
                                 except Exception as e:
                                     if not save_errors:  # if we are not saving the errors raise it
                                         print("Connection Error: Could not upload to " + table)
@@ -469,7 +470,6 @@ def upload_to_rds_table(data_,table:str,dbname=qtheus_rds['dbname'],user=qtheus_
                                         row_num = len(total_time_row)
                                         time_left = (new_rows_len - row_num) * avg_time
                                         print('Upload took',str(total_time),'Seconds'+', '+'Average Upload Time:',str(avg_time)+' Seconds, '+str(round(time_left, 2) / 60) + 'minutes till completion for row #'+str(row_num)+' out of '+str(new_rows_len)+' rows for Chunk #'+str(count+1)+' out of '+str(chunks)+' Total Chunks, '+' Rows Uploaded: '+str(uploaded_rows)+', Rows Not Uploaded:',str(not_uploaded_rows))
-                                uploaded_rows += 1
                         chunk_total_len = len(new_rows)
                         row_total_time = []
                     else:
