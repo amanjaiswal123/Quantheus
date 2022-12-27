@@ -12,6 +12,7 @@ from config.config import logpath
 from config.config import qtheus_rds
 from config.config import slack_token
 import warnings
+pandas.options.mode.chained_assignment = None
 
 
 #This is a file which will be used to import common functions and variables that do not need thier own files
@@ -332,10 +333,14 @@ def upload_to_rds_table(data_,table:str,dbname=qtheus_rds['dbname'],user=qtheus_
     # save_errors: uploads a dataframe to a table and save the rows that do not get uploaded to logpath\errors+table_name.csv, if the error cannot be added to the df then print it
     # index: the index of the dataframe, used for removing duplicate indexes. This is good for composite primary keys(primary keys based on the column values)
     # Try conditions for connecting to db.
+
+
+    #Can further optimize upload speeds by varying chunks sizes when formating and when uploading to db or chunking data after error instead of row by row
+    #Chunking the data when formating helps reduce max ram utilization. Formating two large dataframes takes alot of memory. Chunking it then formating chunk by chunk reduces the max utlilization.
+    #Chunking the data when uploading is beneficial as if there is an error in a chunk it will not need to iterate the entire dataset to find the error. Rather just the chunk. Although the more chunks means the more queries to the db. Less queries is ussually faster. Therefore optimizing chunk size for uploading depends on how many errors are in the dataset
     chunked_data = numpy.array_split(data_,chunks)
-    del data_
     chunk_total_len = len(chunked_data)
-    errors_overall = []
+    errors_overall = numpy.array([])
     print('\n\nStarting Upload of Data\n\n')
     count = 0
     total_time_ = []
@@ -355,7 +360,30 @@ def upload_to_rds_table(data_,table:str,dbname=qtheus_rds['dbname'],user=qtheus_
         raise e
     uploaded_rows = 0
     not_uploaded_rows = 0
+    if "date" in index:
+        min_date = str(pandas.to_datetime(data_['date']).min().date())
+        max_date = str(pandas.to_datetime(data_['date']).max().date())
+        query = f"SELECT * FROM {schema}.{table} where date >= TO_DATE('{min_date}', 'YYYY-MM-DD') and date <= TO_DATE('{max_date}', 'YYYY-MM-DD')"
+    elif "dat" in index:
+        min_date = str(pandas.to_datetime(data_['date']).min().date())
+        max_date = str(pandas.to_datetime(data_['date']).max().date())
+        query = f"SELECT * FROM {schema}.{table} where date >= TO_DATE('{min_date}', 'YYYY-MM-DD') and date <= TO_DATE('{max_date}', 'YYYY-MM-DD')"
+    else:
+        query = f"SELECT * FROM {schema}.{table}"
+    del data_
+    # Construct query to get old data from database and clean it against the new data
+    whole_dbd = pandas.read_sql(query, conn)  # get data from table in df
     for data in chunked_data:
+        if "date" in index:
+            min_date = str(pandas.to_datetime(data['date']).min().date())
+            max_date = str(pandas.to_datetime(data['date']).max().date())
+            dbd = whole_dbd[(whole_dbd['date'] >= min_date) & (whole_dbd['date'] <= max_date)]
+        elif "dat" in index:
+            min_date = str(pandas.to_datetime(data['dat']).min().date())
+            max_date = str(pandas.to_datetime(data['dat']).max().date())
+            dbd = whole_dbd[(whole_dbd['dat'] >= min_date) & (whole_dbd['dat'] <= max_date)]
+        else:
+            dbd = whole_dbd
         total_rows_chunk = len(data)
         start_ = datetime.now()
         print('\n\nFormatting #'+str(count+1)+' out of '+str(chunks)+' Total Chunks')
@@ -368,25 +396,12 @@ def upload_to_rds_table(data_,table:str,dbname=qtheus_rds['dbname'],user=qtheus_
         uploaded_rows_before = uploaded_rows
         del data
         if (~new_rows.empty and remove_duplicate_rows) or (~new_rows.empty and rm_duplicate_index): #If we want to remove duplicate rows or indexes we need to get the data from the table and compare it the data we currently have
-            if "date" in index:
-                min_date = new_rows.index.levels[index.index('date')].min()
-                max_date = new_rows.index.levels[index.index('date')].max()
-                query = f"SELECT * FROM {schema}.{table} where date >= TO_DATE('{min_date}', 'YYYY-MM-DD') and date <= TO_DATE('{max_date}', 'YYYY-MM-DD')"
-            elif "dat" in index:
-                min_date = new_rows.index.levels[index.index('dat')].min()
-                max_date = new_rows.index.levels[index.index('dat')].max()
-                query = f"SELECT * FROM {schema}.{table} where date >= TO_DATE('{min_date}', 'YYYY-MM-DD') and date <= TO_DATE('{max_date}', 'YYYY-MM-DD')"
-            else:
-                query = f"SELECT * FROM {schema}.{table}"
-      # Construct query to get old data from database and clean it against the new data
-            dbd = pandas.read_sql(query, conn) #get data from table in df
             if 'date' in index:
                 dbd['date'] = dbd['date'].dt.strftime('%Y-%m-%d')
             dbd.reset_index(inplace=True, drop=True)
             dbd.set_index(index, inplace=True)
             new_rows = pandas.concat([new_rows, dbd]) #combine the data we have and the data in the table. We can now use .drop_duplicates and .duplicated on the combined df to get only the rows not in the table
             new_rows = pandas.concat([new_rows, dbd]) #We concat the database data twice because when we scan for duplicates all the rows from the db will automaticlly be dropped as they were added twice
-            del dbd
         if remove_duplicate_rows: #if the remove_duplicate_rows argument is True then we will drop duplicate rows
             new_rows['duplicated'] = new_rows.duplicated(keep=False)
             new_rows = new_rows[new_rows['duplicated'] == False]  # Removing Duplicate Rows
@@ -413,12 +428,10 @@ def upload_to_rds_table(data_,table:str,dbname=qtheus_rds['dbname'],user=qtheus_
                 for col in missing_columns: #add the missing columns
                     new_rows[col] = None
                 cd_colnames = new_rows.columns.values
-                errors = new_rows.head(1)  # Creating errors from first row of temp data
+                errors = numpy.array([])
                 uploaded_rows_before = uploaded_rows
                 print("Uploading Chunk #"+str(count+1)+' out of '+str(chunks)+' Total Chunks'+" to RDS")
                 if not new_rows.empty: #After this scrubbing if there is still data left to be uploaded then will will upload it the specified server
-                    if save_errors:  # If we want to save errors we create the errors df from the first row of temp data and drop when saving the df to a csv
-                        errors = new_rows.head(1)  # Creating errors from first row of temp data
                     if not row_by_row: #Upload at once
                         try:
                             new_rows.to_sql(table, conn, if_exists='append',schema=schema,index=False)  # Uploading to rds instance
@@ -428,6 +441,7 @@ def upload_to_rds_table(data_,table:str,dbname=qtheus_rds['dbname'],user=qtheus_
                             notify("Connection Error: Could not upload to \n"+table+str(e))
                             print('\n\nTrying to Upload Row By Row\n\n')
                             total_time_row = []
+                            new_rows_len = len(new_rows)
                             for y in new_rows.index:
                                 row_start = datetime.now()
                                 try:
@@ -440,22 +454,23 @@ def upload_to_rds_table(data_,table:str,dbname=qtheus_rds['dbname'],user=qtheus_
                                         raise e
                                     else:  # if we are saving errors do not raise the error rather add it to a df, if the error cannot be added to the df then print it
                                         try:
-                                            print("Error with " + str(row[index].values))
+                                            print("Error with " + str(row[index].values[0]))
                                             print("Exception " + str(e))
-                                            errors = errors.append(row[index].values)  # add error to errors
+                                            errors = numpy.append(errors, row[index].values[0])
                                         except Exception as e:
-                                            print('Error adding row to errors: ' + str(row[index].values))  # if we cannot add print it
+                                            print('Error adding row to errors: ' + str(row[index].values[0]))  # if we cannot add print it
                                             print('\n\n\n\nException: ' + str(e) + '\n\n\n\n')
                                 row_end = datetime.now()
                                 total_time = (row_end - row_start).total_seconds()
-                                avg_time = (sum(total_time_row) / len(total_time_row))
                                 total_time_row.append(total_time)
+                                if len(total_time_row) != 0:
+                                    avg_time = (sum(total_time_row) / len(total_time_row))
+                                    if len(total_time_row) % 100 == 0:
+                                        row_num = len(total_time_row)
+                                        time_left = (new_rows_len - row_num) * avg_time
+                                        print('Upload took',str(total_time),'Seconds'+', '+'Average Upload Time:',str(avg_time)+' Seconds, '+str(round(time_left, 2) / 60) + 'minutes till completion for row #'+str(row_num)+' out of '+str(new_rows_len)+' rows for Chunk #'+str(count+1)+' out of '+str(chunks)+' Total Chunks, '+' Rows Uploaded: '+str(uploaded_rows)+', Rows Not Uploaded:',str(not_uploaded_rows))
                                 uploaded_rows += 1
-                                if len(total_time_row) % 100 == 0:
-                                    row_num = len(total_time_row)
-                                    time_left = (chunk_total_len - row_num) * avg_time
-                                    print('Upload took',str(total_time),'Seconds'+', '+'Average Upload Time:',str(avg_time)+' Seconds, '+str(round(time_left, 2) / 60) + 'minutes till completion for row #'+str(row_num)+' out of'+str(chunk_total_len)+'rows for Chunk #'+str(count+1)+' out of '+str(chunks)+' Total Chunks, '+' Rows Uploaded: '+str(uploaded_rows)+', Rows Not Uploaded:',str(not_uploaded_rows))
-                        chunk_total_len = len(new_rows.index)
+                        chunk_total_len = len(new_rows)
                         row_total_time = []
                     else:
                         for x in new_rows.index:
@@ -470,39 +485,41 @@ def upload_to_rds_table(data_,table:str,dbname=qtheus_rds['dbname'],user=qtheus_
                                     raise e
                                 else: #if we are saving errors do not raise the error rather add it to a df, if the error cannot be added to the df then print it
                                     try:
-                                        print("Error with "+str(row[index].values))
+                                        print("Error with "+str(row[index].values[0]))
                                         print("Exception "+str(e))
-                                        errors = errors.append(row[index].values) #add error to errors
+                                        errors = numpy.append(errors,row[index].values[0])
                                     except Exception as e:
-                                        print('Error adding row to errors: '+str(row[index].values)) #if we cannot add print it
+                                        print('Error adding row to errors: '+str(row[index].values[0])) #if we cannot add print it
                                         print('\n\n\n\nException: '+str(e)+'\n\n\n\n')
                             row_end = datetime.now()
                             total_time = (row_end - row_start).total_seconds()
                             row_total_time.append((row_end - row_start).total_seconds())
                             uploaded_rows += 1
                             if len(row_total_time)%100 == 0:
-                                avg_time = (sum(row_total_time) / len(row_total_time))
-                                row_num = len(row_total_time)
-                                time_left = (chunk_total_len - row_num)*avg_time
-                                print('Upload took',str(total_time),'Seconds'+', '+'Average Upload Time:',str(avg_time)+' Seconds, '+str(round(time_left, 2) / 60) + 'minutes till completion for row #'+str(row_num)+' out of'+str(chunk_total_len)+'rows for Chunk #'+str(count+1)+' out of '+str(chunks)+' Total Chunks, '+' Rows Uploaded: '+str(uploaded_rows)+', Rows Not Uploaded:',str(not_uploaded_rows))
+                                if len(row_total_time) != 0:
+                                    avg_time = (sum(row_total_time) / len(row_total_time))
+                                    row_num = len(row_total_time)
+                                    time_left = (chunk_total_len - row_num)*avg_time
+                                    print('Upload took',str(total_time),'Seconds'+', '+'Average Upload Time:',str(avg_time)+' Seconds, '+str(round(time_left, 2) / 60) + 'minutes till completion for row #'+str(row_num)+' out of'+str(chunk_total_len)+'rows for Chunk #'+str(count+1)+' out of '+str(chunks)+' Total Chunks, '+' Rows Uploaded: '+str(uploaded_rows)+', Rows Not Uploaded:',str(not_uploaded_rows))
                 if save_errors and len(errors) != 0:
-                    errors_overall.append(errors)
+                    numpy.append(errors_overall,errors)
         not_uploaded_rows += total_rows_chunk-(uploaded_rows-uploaded_rows_before)
         print('Uploaded #'+str(count+1)+' out of '+str(chunks)+' Total Chunks, '+' Rows Uploaded: '+str(uploaded_rows),', Rows Not Uploaded:',str(not_uploaded_rows))
         end_ = datetime.now()
         total_time = (end_ - start_).total_seconds()
         total_time_.append(total_time)
-        avg_time = (sum(total_time_) / (count+1))
-        time_left = (chunks - count+1) * avg_time
-        print('Upload took',str(total_time),'Seconds, Average Upload Time:',str(avg_time),'Seconds'+', '+str(round(time_left, 2) / 60) + ' minutes till upload of all chunks')
+        if count != 0:
+            avg_time = (sum(total_time_) / (count+1))
+            time_left = (chunks - count+1) * avg_time
+            print('Upload took',str(total_time),'Seconds, Average Upload Time:',str(avg_time),'Seconds'+', '+str(round(time_left, 2) / 60) + ' minutes till upload of all chunks')
         count += 1
     if save_errors: #Saving errors to csv if save_errors argument True
         print('errors saved to '+logpath+'errors_'+table+'_'+str(datetime.now())+'.csv')
         try:
-            errors_overall = pandas.concat(errors_overall)
-            errors_overall.drop(index=errors.head(1).index).to_csv(logpath+'errors_'+str(datetime.now().date())+'.csv') #Dropping first row of errors as it was arbitrarily picked from temp_data
+            pandas.DataFrame(errors_overall).to_csv(logpath + 'errors_' + str(datetime.now().date()) + '.csv')
         except Exception as e:
-            print('\n\n\nEXCEPTION\n\n\n')
+            print('\n\n\nEXCEPTION Could not save errors Printing:\n\n\n', errors_overall)
+            print(e)
     print('\n\nUploaded All to RDS\n\n')
 def clean_data(data,Field):
     data.replace('', numpy.nan, inplace=True)
