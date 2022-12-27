@@ -7,7 +7,7 @@ from source.AWS import *
 
 from source.Commons import upload_to_rds_table
 
-firstrun = False
+firstrun = True
 first = False
 # This is used to update data everyday from Alpha Vantage
 os.system('sudo timedatectl set-timezone America/New_York')
@@ -38,10 +38,10 @@ while True:
         upload_to_rds_table(todaydata,'alpha_vantage',row_by_row=True,save_errors=True)
     now = datetime.now()
     # Get the time we want to re-run the program at
-    if Today == str(datetime.today().date()) and firstrun:
+    if Today == str(datetime.today().date()) and not firstrun:
         runAt = (datetime.now() + timedelta(days=1)).replace(hour=3, minute=0, second=0, microsecond=0)
-    elif datetime.now() < (datetime.now() + timedelta(days=0)).replace(hour=21, minute=30, second=0, microsecond=0):
-        runAt = (datetime.now() + timedelta(days=0)).replace(hour=21, minute=30, second=0, microsecond=0)
+    elif datetime.now() < (datetime.now() + timedelta(days=0)).replace(hour=21, minute=30, second=0, microsecond=0) or firstrun:
+        runAt = (datetime.now() + timedelta(days=1)).replace(hour=21, minute=30, second=0, microsecond=0)
     else:
         runAt = (datetime.now() + timedelta(seconds=5))
     # Get the difference between the time we want to sleep at and the time right now
