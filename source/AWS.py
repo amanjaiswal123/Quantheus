@@ -1,9 +1,7 @@
 import boto3
-from time import sleep
 import paramiko
-import os
-from source.Commons import TradingDays
-
+from config.config import qtheus_rds
+import psycopg2
 
 def Start_Instance(instance_id:str,wait_until_start=True):
     #Must pass the ID of the instance you want to connect too as instance_id. if you don't want to wait until the instance has started set wait_until_start to False
@@ -34,3 +32,15 @@ def scpdownload(client,Sending_Path:str,Recieving_Path:str):
     sftp = client.open_sftp()  # IDK what this does saw it on stack over flow I think this creates a instance of the sftp connection
     sftp.get(Sending_Path,Recieving_Path)  # SCPING Data
     sftp.close()  # I think this ends the instance of the connection
+
+def get_max_date(table):
+    try:
+        conn = psycopg2.connect(dbname='postgres', user=qtheus_rds['user'], host=qtheus_rds['host'],password=qtheus_rds['password'])
+    except:
+        raise Exception("Unable to connect to the database")
+    cursor = conn.cursor()
+    cursor.execute(f"SELECT MAX(date) FROM {table}")
+    date = cursor.fetchone()[0]
+    conn.close()
+    cursor.close()
+    return str(date.date())
