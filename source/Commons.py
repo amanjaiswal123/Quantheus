@@ -261,11 +261,11 @@ def datadateslice(Data,Start_Date=None,End_Date=_datadate(Today),Days=None,Tradi
         Start_Date = str(datetime.strptime(End_Date,'%Y-%m-%d') - timedelta(days=Days))[0:10]
         #Calculting Start Date if you defined Trading_Days
     elif Trading_Days != None:
-        Start_Date = TradingDays[TradingDays.index(End_Date)-Trading_Days]
+        Start_Date = TradingDays[TradingDays.index(End_Date)-Trading_Days+1]
 #    datescheck = datadayscheck(Data, Start_Date=Start_Date, End_Date=End_Date, loose=True)
 #    if datescheck['Status'] == False:
 #        raise Exception('The data you passed does not contain the dates you asked for')
-    NData = Data[(Data.index.get_level_values('dat') > Start_Date) & (Data.index.get_level_values('dat') <= End_Date)].copy()
+    NData = Data[(Data.index.get_level_values('dat') >= Start_Date) & (Data.index.get_level_values('dat') <= End_Date)].copy()
     if Trading_Days != None:
         sizefilter = NData.groupby(['ticker', 'exchange']).size() == Trading_Days
         sizefilter = sizefilter[sizefilter == True]
